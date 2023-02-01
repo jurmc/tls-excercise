@@ -2,31 +2,33 @@
 
 import socket, ssl, sys, os
 
-PORT= 10021
-CERT="domain.pem"
-KEY="domain.key"
+PORT= 10022
+SERVER_CERT="certs/server.pem"
+SERVER_KEY="certs/server.key"
+
+CLIENT_CERT="certs/client.pem"
+CLIENT_KEY="certs/client.key"
 
 def client():
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.load_verify_locations(CERT)
-    conn = context.wrap_socket(socket.socket(socket.AF_INET),
-                               server_hostname="localhost")
-    conn.connect(("localhost", PORT))
-
-def client_can_authenticate_to_server():
-    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=CERT)
-    context.load_cert_chain(certfile=CERT, keyfile=KEY)
-    #context.load_verify_locations(CERT)
+    context = ssl.create_default_context()
+    context.load_verify_locations(SERVER_CERT)
     conn = context.wrap_socket(socket.socket(socket.AF_INET),
                                server_hostname="localhost")
     conn.connect(("localhost", PORT))
     conn.send(b"ping!")
+
+def client_can_authenticate_to_server():
+    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=SERVER_CERT)
+    context.load_cert_chain(certfile=CLIENT_CERT, keyfile=CLIENT_KEY)
+    conn = context.wrap_socket(socket.socket(socket.AF_INET),
+                               server_hostname="localhost")
+    conn.connect(("localhost", PORT))
     conn.send(b"ping!")
 
 def server():
     context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
     context.load_default_certs()
-    context.load_cert_chain(certfile=CERT, keyfile=KEY)
+    context.load_cert_chain(certfile=SERVER_CERT, keyfile=SERVER_KEY)
     bindsocket = socket.socket()
     bindsocket.bind(('localhost', PORT))
     bindsocket.listen()
@@ -44,8 +46,8 @@ def server_auth_client():
     context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
     context.verify_mode = ssl.CERT_REQUIRED
 
-    context.load_cert_chain(certfile=CERT, keyfile=KEY)
-    context.load_verify_locations(CERT)
+    context.load_cert_chain(certfile=SERVER_CERT, keyfile=SERVER_KEY)
+    context.load_verify_locations(CLIENT_CERT)
 
     bindsocket = socket.socket()
     bindsocket.bind(('localhost', PORT))
@@ -77,8 +79,10 @@ if len(sys.argv) < 2:
 
 match os.path.basename(sys.argv[1]):
     case "client":
+        #client()
         client_can_authenticate_to_server()
     case "server":
+        #server()
         server_auth_client()
 
 

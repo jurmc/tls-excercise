@@ -82,7 +82,7 @@ match os.path.basename(sys.argv[1]):
         #client()
         client_can_authenticate_to_server()
     case "server":
-        server()
-        #server_auth_client()
+        #server()
+        server_auth_client()
 
 

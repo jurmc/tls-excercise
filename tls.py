@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import socket, ssl, sys, os, time, signal
+import socket, ssl, sys, os, time
 
 PORT= 10021
 SERVER_CERT="certs/server.pem"
@@ -34,14 +34,21 @@ class Server:
         bindsocket.listen()
 
         while True:
-            print("[{}] Waiting for new client".format(self.mode))
-            newsocket, fromaddr = bindsocket.accept()
             try:
-                connstream = context.wrap_socket(newsocket, server_side=True)
-                print("Client connected: {}".format(repr(connstream)))
-                self.deal_with_client(connstream)
-            except ssl.SSLError as e:
-                print("Unsuccessfull connection attempt: {}".format(e))
+                print("[{}] Waiting for new client".format(self.mode))
+                newsocket, fromaddr = bindsocket.accept()
+                try:
+                    connstream = context.wrap_socket(newsocket, server_side=True)
+                    print("Client connected: {}".format(repr(connstream)))
+                    self.deal_with_client(connstream)
+                except ssl.SSLError as e:
+                    print("Unsuccessfull connection attempt: {}".format(e))
+            except KeyboardInterrupt:
+                print("KeyboardInterrupt")
+                if 'connstream' in locals():
+                    connstream.shutdown(socket.SHUT_RDWR)
+                    connstream.close()
+                sys.exit(0)
 
     def deal_with_client(self, connstream):
         while True:

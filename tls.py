@@ -62,7 +62,7 @@ class Server:
                 connstream.close()
                 return
 
-def client_can_authenticate_to_server(mode, port, server_cert, client_cert = None, client_key = None):
+def client(mode, port, server_cert, client_cert = None, client_key = None):
     print("[{}]: Started".format(mode))
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=server_cert)
     if client_cert != None:
@@ -94,13 +94,13 @@ if mode not in ["client", "iwf-client", "client-with-wrong-own-certificate", "cl
 
 match mode:
     case "client":
-        client_can_authenticate_to_server(mode, PORT, SERVER_CERT)
+        client(mode, PORT, SERVER_CERT)
     case "iwf-client": # This client can verify itself to the server
-        client_can_authenticate_to_server(mode, PORT, SERVER_CERT, CLIENT_CERT, CLIENT_KEY)
+        client(mode, PORT, SERVER_CERT, CLIENT_CERT, CLIENT_KEY)
     case "client-with-wrong-own-certificate":
-        client_can_authenticate_to_server(mode, PORT, SERVER_CERT, INVALID_CERT, INVALID_KEY)
+        client(mode, PORT, SERVER_CERT, INVALID_CERT, INVALID_KEY)
     case "client-with-wrong-server-certificate":
-        client_can_authenticate_to_server(mode, PORT, INVALID_CERT, CLIENT_CERT, CLIENT_KEY)
+        client(mode, PORT, INVALID_CERT, CLIENT_CERT, CLIENT_KEY)
     case "server":
         Server(mode, PORT, SERVER_CERT, SERVER_KEY).start()
     case "ats-server": # This server will request certificate from client

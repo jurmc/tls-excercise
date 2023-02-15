@@ -33,8 +33,8 @@ client() ->
     ssl:start(),
     TlsOptions = [
                   {mode, binary},
-                  {active, once},
-                  {verify, verify_peer},
+                  {active, false},
+                  {verify, verify_none},
                   {cacertfile, ?SERVER_CERTFILE}
                  ],
 
@@ -44,6 +44,7 @@ client() ->
     io:format("Send    : ~p~n", [Data]),
     {ok, Data} = ssl:recv(Socket, 0, infinity),
     io:format("Received: ~p~n", [Data]),
+    timer:sleep(5 * 1000),
     ssl:close(Socket),
     ssl:stop().
 
@@ -114,13 +115,12 @@ iwf_client() ->
 
 server() ->
     ssl:start(),
-
     TlsOptions = [{certs_keys, [#{certfile => "certs/server.pem",
                                   keyfile => "certs/server.key"}]},
                   {reuseaddr, true}
                  ],
 
-    {ok, ListenSocket} = ssl:listen(10022, TlsOptions),
+    {ok, ListenSocket} = ssl:listen(?PORT, TlsOptions),
     listen(ListenSocket).
 
 listen(ListenSocket) ->

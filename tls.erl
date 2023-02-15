@@ -1,6 +1,6 @@
 -module(tls).
 
--export([connect/0, connect2/0]).
+-export([client/0, iwf_client/0, client_with_wrong_server_certificate/0, server/0]).
 
 %{crypto_gateway, [
 %    {ip_address, "10.140.192.25"},
@@ -29,16 +29,43 @@
 -define(SERVER_CERTFILE, "certs/server.pem").
 %-define(SERVER_CERTFILE, "/usr/app/iwf/certs/ats.cert.pem").
 
-connect() ->
+client() ->
     ssl:start(),
-    {ok, Socket} = ssl:connect(?SERVER_ADDRESS, ?PORT, [{verify, verify_none}, {cacertfile, "certs/server.pem"},  {active, once}], ?CONNECT_TIMEOUT),
-    %%timer:sleep(5 * 1000),
-    ok = ssl:send(Socket, "foo1"),
-    %%timer:sleep(15 * 1000),
+    TlsOptions = [
+                  {mode, binary},
+                  {active, once},
+                  {verify, verify_peer},
+                  {cacertfile, ?SERVER_CERTFILE}
+                 ],
+
+    {ok, Socket} = ssl:connect(?SERVER_ADDRESS, ?PORT, TlsOptions, ?CONNECT_TIMEOUT),
+    Data = <<"erl ping">>,
+    ok = ssl:send(Socket, Data),
+    io:format("Send    : ~p~n", [Data]),
+    {ok, Data} = ssl:recv(Socket, 0, infinity),
+    io:format("Received: ~p~n", [Data]),
     ssl:close(Socket),
     ssl:stop().
 
-connect2() ->
+client_with_wrong_server_certificate() ->
+    ssl:start(),
+    TlsOptions = [
+                  {mode, binary},
+                  {active, false},
+                  {verify, verify_peer},
+                  {cacertfile, "certs/invalid.pem"}
+                 ],
+
+    {ok, Socket} = ssl:connect(?SERVER_ADDRESS, ?PORT, TlsOptions, ?CONNECT_TIMEOUT),
+    Data = <<"erl ping">>,
+    ok = ssl:send(Socket, Data),
+    io:format("Send    : ~p~n", [Data]),
+    {ok, Data} = ssl:recv(Socket, 0, infinity),
+    io:format("Received: ~p~n", [Data]),
+    ssl:close(Socket),
+    ssl:stop().
+
+iwf_client() ->
 
     io:format("Trying to connect~n", []),
 
@@ -84,4 +111,29 @@ connect2() ->
 
     ssl:close(Socket),
     ssl:stop().
+
+server() ->
+    ssl:start(),
+
+    TlsOptions = [{certs_keys, [#{certfile => "certs/server.pem",
+                                  keyfile => "certs/server.key"}]},
+                  {reuseaddr, true}
+                 ],
+
+    {ok, ListenSocket} = ssl:listen(10022, TlsOptions),
+    listen(ListenSocket).
+
+listen(ListenSocket) ->
+    io:format("Server ready~n", []),
+    {ok, TLSTransportSocket} = ssl:transport_accept(ListenSocket),
+    {ok, Socket} = ssl:handshake(TLSTransportSocket),
+    receive
+        {ssl, Socket, Data} ->
+            io:format("Server received: ~p~n", [Data]),
+            ok = ssl:send(Socket, Data)
+    end,
+    ssl:shutdown(Socket, read_write),
+    ssl:close(Socket),
+    timer:sleep(2 * 1000),
+    listen(ListenSocket).
 

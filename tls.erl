@@ -1,6 +1,6 @@
 -module(tls).
 
--export([client/0, iwf_client/0, client_with_wrong_server_certificate/0, server/0]).
+-export([client/0, iwf_client/0, server/0]).
 
 %{crypto_gateway, [
 %    {ip_address, "10.140.192.25"},
@@ -40,17 +40,21 @@
 server() ->
     server(?SERVER_CERT, ?SERVER_KEY).
 
+client() ->
+    client(?SERVER_CERT).
+%
 %
 % Internal functions
 %
 
-client() ->
+client(ServerCert) ->
     ssl:start(),
     TlsOptions = [
                   {mode, binary},
                   {active, false},
-                  {verify, verify_none},
-                  {cacertfile, ?SERVER_CERT}
+                  {verify, verify_peer},
+                  {cacertfile, ServerCert},
+                  {versions, ['tlsv1.2']}
                  ],
 
     {ok, Socket} = ssl:connect(?SERVER_ADDRESS, ?PORT, TlsOptions, ?CONNECT_TIMEOUT),
@@ -60,24 +64,6 @@ client() ->
     {ok, Data} = ssl:recv(Socket, 0, infinity),
     io:format("Received: ~p~n", [Data]),
     timer:sleep(5 * 1000),
-    ssl:close(Socket),
-    ssl:stop().
-
-client_with_wrong_server_certificate() ->
-    ssl:start(),
-    TlsOptions = [
-                  {mode, binary},
-                  {active, false},
-                  {verify, verify_peer},
-                  {cacertfile, "certs/invalid.pem"}
-                 ],
-
-    {ok, Socket} = ssl:connect(?SERVER_ADDRESS, ?PORT, TlsOptions, ?CONNECT_TIMEOUT),
-    Data = <<"erl ping">>,
-    ok = ssl:send(Socket, Data),
-    io:format("Send    : ~p~n", [Data]),
-    {ok, Data} = ssl:recv(Socket, 0, infinity),
-    io:format("Received: ~p~n", [Data]),
     ssl:close(Socket),
     ssl:stop().
 
@@ -130,7 +116,8 @@ server(ServerCert, ServerKey) ->
     ssl:start(),
     TlsOptions = [{certs_keys, [#{certfile => ServerCert,
                                   keyfile => ServerKey}]},
-                  {reuseaddr, true}
+                  {reuseaddr, true},
+                  {versions, ['tlsv1.2']}
                  ],
 
     {ok, ListenSocket} = ssl:listen(?PORT, TlsOptions),

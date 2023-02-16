@@ -20,14 +20,29 @@
 -define(PASSPHRASE, "").
 %-define(PASSPHRASE, "MBddfR6tCOk9sEgaKPXSHF9Lg9WMgX8vAnBBNoCk6loTe2jSYzptc2VOphlguyEG+ThZSvDExsGyl257tSjP4FQ8tGchMQuDEOTxrQXYTyOb+2RFDiSaggpcRvHg0+ts67FkFRIH8MEdtNiDb/CZ3E4icUr/E3jSpzRgSK4p/A+bfLNEyruDObCC3eqSBmqrFGcL3futb806CoLgy8gmodkGMlYyrG0sHeHjF1BqnHfZHhtc2VW18OGgMw0pBBv2EuMzKKz2n+OswQ1P9m8axbwbsL/l//K1PzwS36NPwCOqND0Z8mcDshTMWMH8UfNrb7hmt1wfV5iYKYMefWCJbw==").
 
--define(CLIENT_CERTFILE, "/root/tls-handshake-excercise/certs/client.pem").
-%-define(CLIENT_CERTFILE, "/usr/app/iwf/certs/iwf.cert.pem").
+-define(CLIENT_CERT, "/root/tls-handshake-excercise/certs/client.pem").
+%-define(CLIENT_CERT, "/usr/app/iwf/certs/iwf.cert.pem").
 
 -define(CLIENT_KEYFILE, "certs/client.key").
 %-define(CLIENT_KEYFILE, "/root/tls-handshake-excercise/certs/iwf.key").
 
--define(SERVER_CERTFILE, "certs/server.pem").
-%-define(SERVER_CERTFILE, "/usr/app/iwf/certs/ats.cert.pem").
+-define(SERVER_CERT, "certs/server.pem").
+-define(SERVER_KEY, "certs/server.key").
+%-define(SERVER_CERT, "/usr/app/iwf/certs/ats.cert.pem").
+
+-define(INVALID_CERT, "certs/invalid.pem").
+-define(INVALID_KEY, "certs/invalid.key").
+
+%
+% Exported functions
+%
+
+server() ->
+    server(?SERVER_CERT, ?SERVER_KEY).
+
+%
+% Internal functions
+%
 
 client() ->
     ssl:start(),
@@ -35,7 +50,7 @@ client() ->
                   {mode, binary},
                   {active, false},
                   {verify, verify_none},
-                  {cacertfile, ?SERVER_CERTFILE}
+                  {cacertfile, ?SERVER_CERT}
                  ],
 
     {ok, Socket} = ssl:connect(?SERVER_ADDRESS, ?PORT, TlsOptions, ?CONNECT_TIMEOUT),
@@ -76,24 +91,22 @@ iwf_client() ->
                    {tos, 224},
                    %{versions, tls_versions()},
                    %{ciphers, tls_ciphers()},
-                   {certfile, ?CLIENT_CERTFILE},
+                   {certfile, ?CLIENT_CERT},
                    {keyfile, ?CLIENT_KEYFILE},
                    %{password, ?PASSPHRASE},
 
                    %{verify, verify_none},
                    {verify, verify_peer},
-                   %{verify_fun, fingerprint_verify_fun(SERVER_CERTFILE)},
-                   {cacertfile, ?SERVER_CERTFILE},
+                   %{verify_fun, fingerprint_verify_fun(SERVER_CERT)},
+                   {cacertfile, ?SERVER_CERT},
 
                    {keepalive, true},
                    {nodelay, true}],
 
     ssl:start(),
     {ok, Socket} = ssl:connect(?SERVER_ADDRESS, ?PORT, TlsOptions, ?CONNECT_TIMEOUT),
-    %%timer:sleep(5 * 1000),
-    %%ok = ssl:send(Socket, "foo2"),
 
-    %%io:format("Sleeping...~n", []), 
+    %%io:format("Sleeping...~n", []),
     %%timer:sleep(1 * 1000),
 
     case ssl:recv(Socket, 0, 1 * 1000) of
@@ -113,10 +126,10 @@ iwf_client() ->
     ssl:close(Socket),
     ssl:stop().
 
-server() ->
+server(ServerCert, ServerKey) ->
     ssl:start(),
-    TlsOptions = [{certs_keys, [#{certfile => "certs/server.pem",
-                                  keyfile => "certs/server.key"}]},
+    TlsOptions = [{certs_keys, [#{certfile => ServerCert,
+                                  keyfile => ServerKey}]},
                   {reuseaddr, true}
                  ],
 

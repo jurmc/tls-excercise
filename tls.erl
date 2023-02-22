@@ -1,139 +1,148 @@
 -module(tls).
 
--export([client/0, iwf_client/0, server/0]).
+% TLS Server
+-export([server/0]).
+% Clients that can connect to the local TLS server (defined in this module too)
+-export([client_certificate_valid/0, client_certificate_invalid/0]).
+% Client that can connect to the ATS TLS server:
+% - you need to supply password to client key somehow)
+% - if you'd like to have server side verification failing, then replace client fingerprint in the ATS config
+-export([iwf_client/0]).
 
-%{crypto_gateway, [
-%    {ip_address, "10.140.192.25"},
-%    {port_number, 9000},
-%    {transport, tls},
-%    {tls_certfile, "/usr/app/iwf/certs/iwf.cert.pem"},
-%    {tls_keyfile, "/usr/app/iwf/certs/private/iwf.key.pem"},
-%    {tls_passphrase, "/usr/app/iwf/certs/private/iwf.key.passphrase"},
-%]},
+-define(LOCAL_SERVER_ADDRESS, "localhost").
+-define(IWF_SERVER_ADDRESS, "10.140.192.25").
 
--define(SERVER_ADDRESS, "localhost").
-%-define(SERVER_ADDRESS, "10.140.192.25").
--define(PORT, 10021).
-%-define(PORT, 9000).
+-define(PORT, 9000).
 -define(CONNECT_TIMEOUT, infinity).
 
--define(PASSPHRASE, "").
-%-define(PASSPHRASE, "MBddfR6tCOk9sEgaKPXSHF9Lg9WMgX8vAnBBNoCk6loTe2jSYzptc2VOphlguyEG+ThZSvDExsGyl257tSjP4FQ8tGchMQuDEOTxrQXYTyOb+2RFDiSaggpcRvHg0+ts67FkFRIH8MEdtNiDb/CZ3E4icUr/E3jSpzRgSK4p/A+bfLNEyruDObCC3eqSBmqrFGcL3futb806CoLgy8gmodkGMlYyrG0sHeHjF1BqnHfZHhtc2VW18OGgMw0pBBv2EuMzKKz2n+OswQ1P9m8axbwbsL/l//K1PzwS36NPwCOqND0Z8mcDshTMWMH8UfNrb7hmt1wfV5iYKYMefWCJbw==").
+-define(LOCAL_CLIENT_CERT, "/home/amj018/tmp/otp_certs/client/cert.pem").
+-define(LOCAL_CLIENT_KEY, "/home/amj018/tmp/otp_certs/client/key.pem").
+-define(IWF_CLIENT_CERT, "/usr/app/iwf/certs/iwf.cert.pem").
+-define(IWF_CLIENT_KEY, "/usr/app/iwf/certs/private/iwf.key.pem").
+%-define(CLIENT_PASSWORD, "").
 
--define(CLIENT_CERT, "/root/tls-handshake-excercise/certs/client.pem").
-%-define(CLIENT_CERT, "/usr/app/iwf/certs/iwf.cert.pem").
+-define(LOCAL_SERVER_CERT, "/home/amj018/tmp/otp_certs/server/cert.pem").
+-define(LOCAL_SERVER_KEY, "/home/amj018/tmp/otp_certs/server/key.pem").
 
--define(CLIENT_KEYFILE, "certs/client.key").
-%-define(CLIENT_KEYFILE, "/root/tls-handshake-excercise/certs/iwf.key").
+-define(LOCAL_INVALID_CERT, "/home/amj018/tls-excercise/certs/invalid.pem").
+-define(LOCAL_INVALID_KEY, "/home/amj018/tls-excercise/certs/invalid.key").
 
--define(SERVER_CERT, "certs/server.pem").
--define(SERVER_KEY, "certs/server.key").
-%-define(SERVER_CERT, "/usr/app/iwf/certs/ats.cert.pem").
-
--define(INVALID_CERT, "certs/invalid.pem").
--define(INVALID_KEY, "certs/invalid.key").
+-define(LOCAL_CACERTS, "/home/amj018/tmp/otp_certs/cacerts.pem").
+-define(ATS_CACERTS, "/usr/app/iwf/certs/ats.cert.pem").
 
 %
 % Exported functions
 %
 
 server() ->
-    server(?SERVER_CERT, ?SERVER_KEY).
+    server(?LOCAL_SERVER_CERT, ?LOCAL_SERVER_KEY, ?LOCAL_CACERTS).
 
-client() ->
-    client(?SERVER_CERT).
-%
+client_certificate_valid() ->
+    client(?LOCAL_CLIENT_CERT, ?LOCAL_CLIENT_KEY, ?LOCAL_CACERTS).
+
+client_certificate_invalid() ->
+    client(?LOCAL_INVALID_CERT, ?LOCAL_INVALID_KEY,  ?LOCAL_CACERTS).
+
+iwf_client() ->
+    client(?IWF_CLIENT_CERT, ?IWF_CLIENT_KEY, ?ATS_CACERTS).
+
 %
 % Internal functions
 %
 
-client(ServerCert) ->
+client(ClientCert, ClientKey, Cacerts) ->
     ssl:start(),
     TlsOptions = [
                   {mode, binary},
                   {active, false},
+                  {tos, 224},
+                  {versions, ['tlsv1.2']},
+                  %{ciphers, ???},
+                  {certfile, ClientCert},
+                  {keyfile, ClientKey},
+                  %{password, ?CLIENT_PASSWORD},
+                  {certs_keys, [#{certfile => ClientCert, keyfile => ClientKey}]},
+                  {verify_fun, {fun(_,{bad_cert, _} = Reason, _) ->
+                                        %io:format("line: ~p~n", [?LINE]),
+                                        {fail, Reason};
+                                   (_,{extension, _}, UserState) ->
+                                        %io:format("line: ~p~n", [?LINE]),
+                                        {unknown, UserState};
+                                   (_, valid, UserState) ->
+                                        %io:format("line: ~p~n", [?LINE]),
+                                        {valid, UserState};
+                                   (_, valid_peer, UserState) ->
+                                        %io:format("line: ~p~n", [?LINE]),
+                                        {valid, UserState}
+                                end, []}
+                  },
+                  {keepalive, true},
+                  {nodelay, true}, %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+                  {cacertfile, Cacerts},
                   {verify, verify_peer},
-                  {cacertfile, ServerCert},
-                  {versions, ['tlsv1.2']}
+                  {server_name_indication, disable}
                  ],
 
-    {ok, Socket} = ssl:connect(?SERVER_ADDRESS, ?PORT, TlsOptions, ?CONNECT_TIMEOUT),
-    Data = <<"erl ping">>,
-    ok = ssl:send(Socket, Data),
-    io:format("Send    : ~p~n", [Data]),
+    io:format("Before ssl:connect~n"),
+    {ok, Socket} = ssl:connect(?LOCAL_SERVER_ADDRESS, ?PORT, TlsOptions, ?CONNECT_TIMEOUT),
+    io:format("After ssl:connect~n"),
     {ok, Data} = ssl:recv(Socket, 0, infinity),
     io:format("Received: ~p~n", [Data]),
+    ok = ssl:send(Socket, Data),
+    io:format("Send    : ~p~n", [Data]),
     timer:sleep(5 * 1000),
     ssl:close(Socket),
     ssl:stop().
 
-iwf_client() ->
-
-    io:format("Trying to connect~n", []),
-
-    TlsOptions = [
-                   {mode, binary},
-                   {active, false},
-                   {tos, 224},
-                   %{versions, tls_versions()},
-                   %{ciphers, tls_ciphers()},
-                   {certfile, ?CLIENT_CERT},
-                   {keyfile, ?CLIENT_KEYFILE},
-                   %{password, ?PASSPHRASE},
-
-                   %{verify, verify_none},
-                   {verify, verify_peer},
-                   %{verify_fun, fingerprint_verify_fun(SERVER_CERT)},
-                   {cacertfile, ?SERVER_CERT},
-
-                   {keepalive, true},
-                   {nodelay, true}],
-
-    ssl:start(),
-    {ok, Socket} = ssl:connect(?SERVER_ADDRESS, ?PORT, TlsOptions, ?CONNECT_TIMEOUT),
-
-    %%io:format("Sleeping...~n", []),
-    %%timer:sleep(1 * 1000),
-
-    case ssl:recv(Socket, 0, 1 * 1000) of
-        {ok, Data} -> io:format("Client received: ~p~n", [Data]);
-        {error, closed} -> io:format("Socket closed~n", []);
-        {error, Reason} -> io:format("Error, reason: ~p~n", [Reason])
-    end,
-
-    %%io:format("Receiving...~n", []), 
-    %%{ok, Data} = ssl:recv(Socket, 1024, infinity),
-    %%io:format("Client received: ~p~n", [Data]),
-
-    io:format("Sleeping...~n", []), 
-    timer:sleep(15 * 1000),
-    io:format("End of sleeping...~n", []), 
-
-    ssl:close(Socket),
-    ssl:stop().
-
-server(ServerCert, ServerKey) ->
+server(ServerCert, ServerKey, Cacerts) ->
     ssl:start(),
     TlsOptions = [{certs_keys, [#{certfile => ServerCert,
                                   keyfile => ServerKey}]},
                   {reuseaddr, true},
-                  {versions, ['tlsv1.2']}
+                  {versions, ['tlsv1.2']},
+                  {cacertfile, Cacerts},
+
+                  {verify, verify_peer},
+                  {verify_fun, {fun(_,{bad_cert, _} = Reason, _) ->
+                                        %io:format("line: ~p~n", [?LINE]),
+                                        {fail, Reason};
+                                   (_,{extension, _}, UserState) ->
+                                        %io:format("line: ~p~n", [?LINE]),
+                                        {unknown, UserState};
+                                   (_, valid, UserState) ->
+                                        %io:format("line: ~p~n", [?LINE]),
+                                        {valid, UserState};
+                                   (_, valid_peer, UserState) ->
+                                        %io:format("line: ~p~n", [?LINE]),
+                                        {valid, UserState}
+                                end, []}
+                  }
                  ],
 
-    {ok, ListenSocket} = ssl:listen(?PORT, TlsOptions),
-    listen(ListenSocket).
+    HandshakeTlsOptions = [
+                           [{verify, verify_peer},
+                            {fail_if_no_peer_cert, true},
+                            {cacertfile, Cacerts},
+                            {certs_keys, [#{certfile => ServerCert, keyfile => ServerKey}]}]
+                          ],
 
-listen(ListenSocket) ->
+    {ok, ListenSocket} = ssl:listen(?PORT, TlsOptions),
+    listen(ListenSocket, HandshakeTlsOptions).
+
+listen(ListenSocket, HandshakeTlsOptions) ->
     io:format("Server ready~n", []),
     {ok, TLSTransportSocket} = ssl:transport_accept(ListenSocket),
-    {ok, Socket} = ssl:handshake(TLSTransportSocket),
+    {ok, Socket} = ssl:handshake(TLSTransportSocket, HandshakeTlsOptions),
+    Data = "server ping",
+    ok = ssl:send(Socket, Data),
+    io:format("Server send: ~p~n", [Data]),
     receive
         {ssl, Socket, Data} ->
-            io:format("Server received: ~p~n", [Data]),
-            ok = ssl:send(Socket, Data)
+            io:format("Server received: ~p~n", [Data])
     end,
     ssl:shutdown(Socket, read_write),
     ssl:close(Socket),
     timer:sleep(2 * 1000),
-    listen(ListenSocket).
+    listen(ListenSocket, HandshakeTlsOptions).
 
